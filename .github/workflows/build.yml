@@ -28,17 +28,17 @@ jobs:
         node-version: '18'
     
     - name: Install dependencies
-      working-directory: ./cordova-app
+      working-directory: .
       run: |
         npm install
         npm install -g cordova
     
     - name: Add Android platform
-      working-directory: ./cordova-app
+      working-directory: .
       run: cordova platform add android
     
     - name: Build APK
-      working-directory: ./cordova-app
+      working-directory: .
       run: cordova build android
     
     - name: Find APK location
