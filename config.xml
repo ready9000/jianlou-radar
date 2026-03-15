@@ -15,7 +15,7 @@
     <!-- 应用配置 -->
     <preference name="Orientation" value="portrait" />
     <preference name="Fullscreen" value="false" />
-    <preference name="BackgroundColor" value="0xFFF5F5F7" />
+    <preference name="BackgroundColor" value="#F5F5F7" />
     <preference name="StatusBarBackgroundColor" value="#FF6B35" />
     <preference name="StatusBarStyle" value="lightcontent" />
     
