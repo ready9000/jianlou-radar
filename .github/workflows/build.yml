@@ -28,19 +28,32 @@ jobs:
         node-version: '18'
     
     - name: Install dependencies
+      working-directory: ./cordova-app
       run: |
         npm install
         npm install -g cordova
     
     - name: Add Android platform
+      working-directory: ./cordova-app
       run: cordova platform add android
     
     - name: Build APK
+      working-directory: ./cordova-app
       run: cordova build android
     
-    - name: Upload APK
+    - name: Find APK location
+      run: |
+        echo "Searching for APK files..."
+        find cordova-app/platforms/android -name "*.apk" -type f 2>/dev/null || echo "No APK files found"
+        echo "Listing build directories..."
+        ls -la cordova-app/platforms/android/app/build/outputs/apk/debug/ 2>/dev/null || echo "Debug APK directory not found"
+        ls -la cordova-app/platforms/android/build/outputs/apk/debug/ 2>/dev/null || echo "Alternative APK directory not found"
+    
+    - name: Find and Upload APK
       uses: actions/upload-artifact@v4
       with:
         name: jianlou-radar-apk
-        path: cordova-app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
-
+        path: |
+          cordova-app/platforms/android/app/build/outputs/apk/debug/*.apk
+          cordova-app/platforms/android/build/outputs/apk/debug/*.apk
+        if-no-files-found: warn
