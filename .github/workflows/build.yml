@@ -53,7 +53,5 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: jianlou-radar-apk
-        path: |
-          cordova-app/platforms/android/app/build/outputs/apk/debug/*.apk
-          cordova-app/platforms/android/build/outputs/apk/debug/*.apk
+        path: '**/*.apk'
         if-no-files-found: warn
