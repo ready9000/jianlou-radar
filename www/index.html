@@ -1,0 +1,1929 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#FF6B35">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="捡漏雷达">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>捡漏雷达 - 二手低价监控</title>
+<script>
+  // Register Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registered'))
+      .catch(err => console.log('SW error', err));
+  }
+</script>
+<style>
+  :root {
+    --primary: #FF6B35;
+    --primary-light: #FFF0EB;
+    --primary-dark: #E5551F;
+    --bg: #F5F5F7;
+    --card: #FFFFFF;
+    --text: #1A1A1A;
+    --text-muted: #888;
+    --border: #EBEBEB;
+    --deal: #FF3B30;
+    --deal-bg: #FFF0EF;
+    --ok: #34C759;
+    --ok-bg: #F0FFF4;
+    --warn: #FF9500;
+    --warn-bg: #FFF8EE;
+    --xianyu: #FF5722;
+    --zhuanzhuan: #00B4D8;
+    --shadow: 0 2px 16px rgba(0,0,0,0.08);
+    --radius: 16px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: -apple-system, 'PingFang SC', 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    max-width: 420px;
+    margin: 0 auto;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  /* ===== SCREEN MANAGER ===== */
+  .screen { display: none; flex-direction: column; min-height: 100vh; }
+  .screen.active { display: flex; }
+
+  /* ===== STATUS BAR ===== */
+  .status-bar {
+    background: white;
+    padding: 14px 20px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    border-bottom: 1px solid var(--border);
+  }
+  .status-bar .logo {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .status-bar .logo span { font-size: 22px; }
+  .status-bar .actions { display: flex; gap: 12px; align-items: center; }
+  .icon-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .icon-btn:active { transform: scale(0.92); background: var(--border); }
+  .badge {
+    position: absolute;
+    top: 2px; right: 2px;
+    background: var(--deal);
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    width: 16px; height: 16px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid white;
+  }
+
+  /* ===== TABS ===== */
+  .tab-bar {
+    background: white;
+    border-top: 1px solid var(--border);
+    display: flex;
+    position: fixed;
+    bottom: 0; left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 420px;
+    z-index: 100;
+    padding-bottom: env(safe-area-inset-bottom, 8px);
+  }
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 10px 0;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    background: none;
+    color: var(--text-muted);
+    font-size: 10px;
+  }
+  .tab-item .tab-icon { font-size: 22px; line-height: 1; }
+  .tab-item.active { color: var(--primary); }
+  .tab-item.active .tab-icon { transform: scale(1.1); }
+
+  /* ===== SCROLL CONTENT ===== */
+  .scroll-content {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 70px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .scroll-content::-webkit-scrollbar { display: none; }
+
+  /* ===== SECTION TITLE ===== */
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 16px 8px;
+  }
+  .section-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-more {
+    font-size: 13px;
+    color: var(--primary);
+    cursor: pointer;
+    background: none;
+    border: none;
+  }
+
+  /* ===== DEAL ALERT BANNER ===== */
+  .alert-banner {
+    margin: 12px 16px;
+    background: linear-gradient(135deg, #FF6B35 0%, #FF3B30 100%);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    color: white;
+    position: relative;
+    overflow: hidden;
+  }
+  .alert-banner::before {
+    content: '';
+    position: absolute;
+    right: -20px; top: -20px;
+    width: 100px; height: 100px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 50%;
+  }
+  .alert-banner::after {
+    content: '';
+    position: absolute;
+    right: 20px; top: 30px;
+    width: 60px; height: 60px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 50%;
+  }
+  .alert-banner .alert-tag {
+    font-size: 11px;
+    font-weight: 700;
+    background: rgba(255,255,255,0.25);
+    border-radius: 20px;
+    padding: 2px 10px;
+    display: inline-block;
+    margin-bottom: 8px;
+  }
+  .alert-banner h3 { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+  .alert-banner p { font-size: 13px; opacity: 0.85; }
+  .alert-banner .alert-price {
+    font-size: 32px;
+    font-weight: 900;
+    margin: 8px 0 4px;
+  }
+  .alert-banner .alert-price small { font-size: 16px; font-weight: 500; }
+  .alert-banner .alert-avg {
+    font-size: 12px;
+    opacity: 0.8;
+    text-decoration: line-through;
+  }
+  .alert-banner .grab-btn {
+    position: absolute;
+    right: 20px;
+    bottom: 20px;
+    background: white;
+    color: var(--primary);
+    border: none;
+    border-radius: 20px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 1;
+  }
+
+  /* ===== DEAL CARDS ===== */
+  .deal-list { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+  
+  .deal-card {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+    border: 1.5px solid transparent;
+  }
+  .deal-card:active { transform: scale(0.98); }
+  .deal-card.hot-deal { border-color: var(--deal); }
+  
+  .deal-card .card-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 36px;
+  }
+  
+  .deal-card .card-body { flex: 1; min-width: 0; }
+  .deal-card .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .deal-card .card-specs {
+    font-size: 11px;
+    color: var(--primary);
+    background: var(--primary-light);
+    padding: 2px 8px;
+    border-radius: 10px;
+    display: inline-block;
+    margin-bottom: 6px;
+  }
+  .deal-card .card-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .seller-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+  }
+  .seller-badge.personal { background: var(--ok-bg); color: var(--ok); }
+  .seller-badge.business { background: var(--warn-bg); color: var(--warn); }
+  .seller-badge.unknown { background: var(--bg); color: var(--text-muted); }
+  
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .price-current {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--deal);
+  }
+  .price-current small { font-size: 13px; }
+  .price-avg {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-decoration: line-through;
+  }
+  
+  .card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  
+  .platform-tag {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 20px;
+  }
+  .platform-tag.xianyu {
+    background: #FFF0EB;
+    color: var(--xianyu);
+  }
+  .platform-tag.zhuanzhuan {
+    background: #E8F8FF;
+    color: var(--zhuanzhuan);
+  }
+  
+  .discount-badge {
+    font-size: 12px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 20px;
+  }
+  .discount-badge.extreme { background: var(--deal-bg); color: var(--deal); }
+  .discount-badge.good { background: var(--warn-bg); color: var(--warn); }
+  
+  .card-time {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ===== HOT DEAL RIBBON ===== */
+  .hot-ribbon {
+    position: absolute;
+    top: 10px; right: -20px;
+    background: var(--deal);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 28px;
+    transform: rotate(35deg);
+  }
+
+  /* ===== STATS ROW ===== */
+  .stats-row {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+  .stat-card {
+    flex: 1;
+    background: white;
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .stat-num {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--primary);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-label { font-size: 11px; color: var(--text-muted); }
+
+  /* ===== FILTER BAR ===== */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px;
+    background: white;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-toggle {
+    flex-shrink: 0;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: white;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .filter-toggle.active {
+    background: var(--ok-bg);
+    color: var(--ok);
+    border-color: var(--ok);
+  }
+  .filter-toggle.warning {
+    background: var(--warn-bg);
+    color: var(--warn);
+    border-color: var(--warn);
+  }
+
+  /* ===== CATEGORY FILTERS ===== */
+  .filter-scroll {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px 4px;
+    overflow-x: auto;
+  }
+  .filter-scroll::-webkit-scrollbar { display: none; }
+  .filter-chip {
+    flex-shrink: 0;
+    padding: 7px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid var(--border);
+    background: white;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .filter-chip.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+  }
+
+  /* ===== SUBSCRIBE SCREEN ===== */
+  .subscribe-header {
+    background: linear-gradient(135deg, #1A1A2E 0%, #16213E 100%);
+    padding: 24px 20px 30px;
+    color: white;
+  }
+  .subscribe-header h2 { font-size: 22px; font-weight: 800; margin-bottom: 6px; }
+  .subscribe-header p { font-size: 13px; opacity: 0.7; }
+
+  .subscribe-form {
+    margin: -16px 16px 0;
+    background: white;
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; display: block; }
+  .form-input {
+    width: 100%;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+    font-family: inherit;
+  }
+  .form-input:focus { border-color: var(--primary); }
+  
+  .range-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .range-row .form-input { flex: 1; }
+  .range-row span { font-size: 13px; color: var(--text-muted); }
+
+  .platform-select {
+    display: flex;
+    gap: 10px;
+  }
+  .platform-option {
+    flex: 1;
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: white;
+  }
+  .platform-option.selected {
+    border-color: var(--primary);
+    background: var(--primary-light);
+  }
+  .platform-option .p-icon { font-size: 24px; margin-bottom: 4px; }
+  .platform-option .p-name { font-size: 12px; font-weight: 600; }
+
+  .discount-slider-wrap { padding: 8px 0; }
+  .slider-value {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--deal);
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--primary) 0%, var(--primary) 40%, var(--border) 40%);
+    outline: none;
+    cursor: pointer;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--primary);
+    box-shadow: 0 2px 8px rgba(255,107,53,0.4);
+    cursor: pointer;
+  }
+  .slider-hints { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  .add-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 4px;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+  .add-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+  /* ===== SUBSCRIPTION LIST ===== */
+  .sub-list { padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .sub-item {
+    background: white;
+    border-radius: 14px;
+    padding: 14px 16px;
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sub-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    background: var(--primary-light);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .sub-info { flex: 1; min-width: 0; }
+  .sub-name { font-size: 15px; font-weight: 700; margin-bottom: 3px; }
+  .sub-meta { font-size: 12px; color: var(--text-muted); }
+  .sub-toggle {
+    width: 44px; height: 26px;
+    border-radius: 13px;
+    background: var(--ok);
+    position: relative;
+    cursor: pointer;
+    border: none;
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .sub-toggle::after {
+    content: '';
+    position: absolute;
+    right: 3px; top: 3px;
+    width: 20px; height: 20px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  .sub-toggle.off { background: var(--border); }
+  .sub-toggle.off::after { transform: translateX(-18px); }
+  .sub-hits {
+    font-size: 11px;
+    background: var(--deal-bg);
+    color: var(--deal);
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+  }
+
+  /* ===== PRODUCT DETAIL ===== */
+  .detail-screen { background: var(--bg); }
+  .detail-header {
+    background: white;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .back-btn {
+    font-size: 22px;
+    cursor: pointer;
+    color: var(--text);
+    background: none;
+    border: none;
+    padding: 0;
+    line-height: 1;
+  }
+  .detail-header .h-title { font-size: 16px; font-weight: 700; }
+
+  .detail-img {
+    width: 100%;
+    height: 280px;
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 90px;
+  }
+
+  .detail-body { padding: 16px; }
+
+  .detail-price-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .detail-price { font-size: 38px; font-weight: 900; color: var(--deal); }
+  .detail-price small { font-size: 20px; }
+  .detail-market-price { font-size: 14px; color: var(--text-muted); margin-top: 4px; }
+  .detail-market-price span { text-decoration: line-through; }
+  
+  .savings-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--deal-bg);
+    color: var(--deal);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 14px;
+    border-radius: 20px;
+    margin-top: 10px;
+  }
+
+  .price-chart-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .chart-title { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+  
+  .mini-chart {
+    height: 80px;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    padding: 0 4px;
+  }
+  .chart-bar {
+    flex: 1;
+    border-radius: 4px 4px 0 0;
+    position: relative;
+    transition: all 0.3s;
+    min-width: 20px;
+  }
+  .chart-bar.avg { background: #E8E8E8; }
+  .chart-bar.current { background: var(--deal); }
+  .chart-bar.normal { background: var(--ok); opacity: 0.7; }
+
+  .chart-labels { display: flex; gap: 4px; padding: 4px 4px 0; }
+  .chart-label { flex: 1; text-align: center; font-size: 9px; color: var(--text-muted); }
+
+  .detail-info-card {
+    background: white;
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow);
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-row .label { color: var(--text-muted); }
+  .info-row .value { font-weight: 600; }
+
+  .action-area {
+    padding: 16px;
+    display: flex;
+    gap: 10px;
+  }
+  .action-btn {
+    flex: 1;
+    border: none;
+    border-radius: 14px;
+    padding: 16px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+  .action-btn:active { transform: scale(0.97); }
+  .action-btn.primary {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+  }
+  .action-btn.secondary {
+    background: white;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+  }
+
+  /* ===== NOTIFICATION SCREEN ===== */
+  .notif-list { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .notif-item {
+    background: white;
+    border-radius: 14px;
+    padding: 14px;
+    display: flex;
+    gap: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .notif-item.unread::before {
+    content: '';
+    position: absolute;
+    left: 14px; top: 14px;
+    width: 8px; height: 8px;
+    background: var(--deal);
+    border-radius: 50%;
+  }
+  .notif-item.unread .notif-body { padding-left: 14px; }
+  .notif-icon-wrap {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    flex-shrink: 0;
+  }
+  .notif-body { flex: 1; }
+  .notif-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .notif-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; line-height: 1.4; }
+  .notif-time { font-size: 11px; color: var(--text-muted); }
+  .notif-price { font-size: 16px; font-weight: 800; color: var(--deal); }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-state {
+    text-align: center;
+    padding: 60px 30px;
+    color: var(--text-muted);
+  }
+  .empty-state .empty-icon { font-size: 56px; margin-bottom: 16px; }
+  .empty-state h3 { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; line-height: 1.6; }
+
+  /* ===== TOAST ===== */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    transition: all 0.3s;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== PULSE ANIMATION ===== */
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,59,48,0.4); }
+    70% { box-shadow: 0 0 0 10px rgba(255,59,48,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,59,48,0); }
+  }
+  .pulse { animation: pulse 2s infinite; }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .slide-in { animation: slideIn 0.3s ease-out; }
+
+  @keyframes fadeUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .fade-up { animation: fadeUp 0.4s ease-out both; }
+
+  .fade-up:nth-child(1) { animation-delay: 0s; }
+  .fade-up:nth-child(2) { animation-delay: 0.05s; }
+  .fade-up:nth-child(3) { animation-delay: 0.1s; }
+  .fade-up:nth-child(4) { animation-delay: 0.15s; }
+  .fade-up:nth-child(5) { animation-delay: 0.2s; }
+
+  /* ===== MODAL OVERLAY ===== */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-sheet {
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    background: white;
+    border-radius: 24px 24px 0 0;
+    padding: 24px 20px;
+    animation: slideIn 0.3s ease-out;
+  }
+  .modal-handle {
+    width: 36px; height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; }
+  .modal-actions { display: flex; flex-direction: column; gap: 10px; }
+  .modal-action-btn {
+    padding: 14px;
+    border-radius: 14px;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s;
+  }
+  .modal-action-btn:active { transform: scale(0.98); }
+  .modal-action-btn.xianyu-btn { background: #FFF0EB; color: var(--xianyu); }
+  .modal-action-btn.zhuanzhuan-btn { background: #E8F8FF; color: var(--zhuanzhuan); }
+  .modal-action-btn .m-icon { font-size: 22px; }
+
+  /* ===== ONBOARDING ===== */
+  .onboard-screen {
+    background: linear-gradient(180deg, #1A1A2E 0%, #16213E 50%, #0F3460 100%);
+    color: white;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 30px;
+    text-align: center;
+  }
+  .onboard-screen .ob-icon { font-size: 80px; margin-bottom: 30px; }
+  .onboard-screen h1 {
+    font-size: 32px; font-weight: 900; margin-bottom: 8px;
+    background: linear-gradient(135deg, #FF6B35, #FF9500);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .onboard-screen .ob-sub { font-size: 18px; opacity: 0.85; margin-bottom: 12px; }
+  .onboard-screen .ob-desc { font-size: 14px; opacity: 0.6; line-height: 1.7; margin-bottom: 50px; }
+  .ob-features { display: flex; flex-direction: column; gap: 12px; width: 100%; margin-bottom: 40px; }
+  .ob-feature {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: rgba(255,255,255,0.08);
+    padding: 14px 16px;
+    border-radius: 14px;
+    text-align: left;
+  }
+  .ob-feature .f-icon { font-size: 26px; flex-shrink: 0; }
+  .ob-feature .f-text { font-size: 13px; opacity: 0.9; line-height: 1.4; }
+  .ob-feature .f-text strong { font-size: 14px; display: block; margin-bottom: 2px; }
+  .start-btn {
+    width: 100%;
+    background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 18px;
+    font-size: 17px;
+    font-weight: 800;
+    cursor: pointer;
+    font-family: inherit;
+    box-shadow: 0 8px 24px rgba(255,107,53,0.4);
+    transition: all 0.2s;
+  }
+  .start-btn:active { transform: scale(0.97); }
+
+  /* Scanning animation */
+  @keyframes scan {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100%); }
+  }
+  .scanning-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    animation: scan 2s linear infinite;
+  }
+</style>
+</head>
+<body>
+
+<!-- ===== ONBOARDING SCREEN ===== -->
+<div id="screen-onboard" class="screen active onboard-screen">
+  <div class="ob-icon">📡</div>
+  <h1>捡漏雷达</h1>
+  <div class="ob-sub">二手低价商品智能监控</div>
+  <div class="ob-desc">自动扫描咸鱼、转转，发现低于<br>全网均价 <strong>40%+</strong> 的超值捡漏机会</div>
+  <div class="ob-features">
+    <div class="ob-feature">
+      <div class="f-icon">🔍</div>
+      <div class="f-text">
+        <strong>关键词订阅监控</strong>
+        设置想买的商品，24小时自动扫描比价
+      </div>
+    </div>
+    <div class="ob-feature">
+      <div class="f-icon">⚡️</div>
+      <div class="f-text">
+        <strong>实时低价推送</strong>
+        发现低价立即通知，第一时间抢到好货
+      </div>
+    </div>
+    <div class="ob-feature">
+      <div class="f-icon">🔗</div>
+      <div class="f-text">
+        <strong>一键跳转下单</strong>
+        直接跳转咸鱼/转转商品页，快速完成交易
+      </div>
+    </div>
+  </div>
+  <button class="start-btn" onclick="goToMain()">开始捡漏 →</button>
+</div>
+
+<!-- ===== MAIN SCREEN ===== -->
+<div id="screen-main" class="screen">
+  <!-- Header -->
+  <div class="status-bar">
+    <div class="logo">
+      <span>📡</span> 捡漏雷达
+    </div>
+    <div class="actions">
+      <button class="icon-btn" onclick="showToast('🔄 正在刷新数据...')">🔄</button>
+      <button class="icon-btn" onclick="switchTab('notif')">
+        🔔
+        <span class="badge">3</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="scroll-content">
+    <!-- Stats -->
+    <div class="stats-row fade-up">
+      <div class="stat-card">
+        <div class="stat-num" id="stat-today">12</div>
+        <div class="stat-label">今日新低价</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">5</div>
+        <div class="stat-label">监控关键词</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">¥ 3.2K</div>
+        <div class="stat-label">帮你省了</div>
+      </div>
+    </div>
+
+    <!-- Hot deal banner -->
+    <div class="alert-banner fade-up" onclick="openDetail('iphone15')">
+      <div class="alert-tag">🔥 超级捡漏 · 刚刚发现</div>
+      <h3>iPhone 15 Pro 256G 国行</h3>
+      <p>成色9新 · 咸鱼 · 5分钟前发布</p>
+      <div class="alert-price"><small>¥</small> 2,480</div>
+      <div class="alert-avg">全网均价 ¥ 5,200 · 低 52%</div>
+      <button class="grab-btn">立刻看 →</button>
+    </div>
+
+    <!-- Smart Filter Bar -->
+    <div class="filter-bar fade-up">
+      <button class="filter-toggle active" id="filter-personal" onclick="toggleSellerFilter('personal')">
+        👤 仅看个人
+      </button>
+      <button class="filter-toggle active" id="filter-spec" onclick="toggleSpecMatch()">
+        ✓ 规格匹配
+      </button>
+      <button class="filter-toggle warning" id="filter-business" onclick="toggleSellerFilter('business')">
+        🏪 屏蔽商家
+      </button>
+      <button class="filter-toggle" id="filter-credit" onclick="toggleCreditFilter()">
+        ⭐ 高信用
+      </button>
+    </div>
+
+    <!-- Filter chips -->
+    <div class="filter-scroll fade-up">
+      <div class="filter-chip active" onclick="filterDeals(this, 'all')">全部</div>
+      <div class="filter-chip" onclick="filterDeals(this, 'phone')">📱 手机</div>
+      <div class="filter-chip" onclick="filterDeals(this, 'computer')">💻 电脑</div>
+      <div class="filter-chip" onclick="filterDeals(this, 'game')">🎮 游戏</div>
+      <div class="filter-chip" onclick="filterDeals(this, 'camera')">📷 相机</div>
+      <div class="filter-chip" onclick="filterDeals(this, 'audio')">🎧 耳机</div>
+    </div>
+
+    <!-- Section -->
+    <div class="section-header">
+      <div class="section-title">今日捡漏清单</div>
+      <button class="section-more">查看全部</button>
+    </div>
+
+    <!-- Deal cards -->
+    <div class="deal-list" id="deal-list">
+      
+      <div class="deal-card hot-deal fade-up" onclick="openDetail('iphone15')" data-cat="phone">
+        <div class="hot-ribbon">极低价</div>
+        <div class="card-img">📱</div>
+        <div class="card-body">
+          <div class="card-title">iPhone 15 Pro 256G 国行<span class="seller-badge personal">个人</span></div>
+          <div class="card-specs">✓ 256GB · 国行 · 原色钛金属 · 电池100%</div>
+          <div class="card-desc">成色9新，无维修，附配件全套</div>
+          <div class="price-row">
+            <div class="price-current pulse"><small>¥</small>2,480</div>
+            <div class="price-avg">同配置均价 ¥5,200</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag xianyu">🐟 咸鱼</span>
+            <span class="discount-badge extreme">省 52%</span>
+            <span class="card-time">5分钟前</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deal-card fade-up" onclick="openDetail('macbook')" data-cat="computer">
+        <div class="card-img">💻</div>
+        <div class="card-body">
+          <div class="card-title">MacBook Pro 14 M2 512G<span class="seller-badge personal">个人</span></div>
+          <div class="card-specs">✓ 512GB SSD · 16GB内存 · M2 Pro芯片 · 深空灰</div>
+          <div class="card-desc">2023款，95新，自用，不议价</div>
+          <div class="price-row">
+            <div class="price-current"><small>¥</small>6,300</div>
+            <div class="price-avg">同配置均价 ¥11,500</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag zhuanzhuan">🔄 转转</span>
+            <span class="discount-badge extreme">省 45%</span>
+            <span class="card-time">23分钟前</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deal-card fade-up" onclick="openDetail('ps5')" data-cat="game">
+        <div class="card-img">🎮</div>
+        <div class="card-body">
+          <div class="card-title">PS5 数字版 港版<span class="seller-badge personal">个人</span></div>
+          <div class="card-specs">✓ 数字版 · 港版 · 双手柄 · 含原盒</div>
+          <div class="card-desc">99新，送2个手柄，因换XSX出</div>
+          <div class="price-row">
+            <div class="price-current"><small>¥</small>1,650</div>
+            <div class="price-avg">同配置均价 ¥3,200</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag xianyu">🐟 咸鱼</span>
+            <span class="discount-badge extreme">省 48%</span>
+            <span class="card-time">1小时前</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 商家商品示例（会被过滤） -->
+      <div class="deal-card fade-up filtered" onclick="openDetail('iphone15biz')" data-cat="phone" id="biz-item-1" style="display:none">
+        <div class="card-img">📱</div>
+        <div class="card-body">
+          <div class="card-title">iPhone 15 Pro 256G<span class="seller-badge business">商家</span></div>
+          <div class="card-specs">✓ 256GB · 国行 · 原色钛金属</div>
+          <div class="card-desc">大量现货，批发价，支持验机</div>
+          <div class="price-row">
+            <div class="price-current"><small>¥</small>2,200</div>
+            <div class="price-avg">同配置均价 ¥5,200</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag xianyu">🐟 咸鱼</span>
+            <span class="discount-badge extreme">省 58%</span>
+            <span class="card-time">刚刚</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deal-card fade-up" onclick="openDetail('sony')" data-cat="audio">
+        <div class="card-img">🎧</div>
+        <div class="card-body">
+          <div class="card-title">Sony WH-1000XM5 黑色</div>
+          <div class="card-desc">9新，降噪完好，配件齐全</div>
+          <div class="price-row">
+            <div class="price-current"><small>¥</small>820</div>
+            <div class="price-avg">均价 ¥1,800</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag zhuanzhuan">🔄 转转</span>
+            <span class="discount-badge good">省 54%</span>
+            <span class="card-time">2小时前</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="deal-card fade-up" onclick="openDetail('camera')" data-cat="camera">
+        <div class="card-img">📷</div>
+        <div class="card-body">
+          <div class="card-title">Sony A7M4 相机 + 28-70套</div>
+          <div class="card-desc">8新，快门约3万次，无修</div>
+          <div class="price-row">
+            <div class="price-current"><small>¥</small>9,200</div>
+            <div class="price-avg">均价 ¥17,500</div>
+          </div>
+          <div class="card-footer">
+            <span class="platform-tag xianyu">🐟 咸鱼</span>
+            <span class="discount-badge extreme">省 47%</span>
+            <span class="card-time">3小时前</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-item active" onclick="switchTab('main')">
+      <span class="tab-icon">🏠</span>发现
+    </button>
+    <button class="tab-item" onclick="switchTab('subscribe')">
+      <span class="tab-icon">⭐</span>订阅
+    </button>
+    <button class="tab-item" onclick="switchTab('notif')">
+      <span class="tab-icon">🔔</span>通知
+    </button>
+    <button class="tab-item" onclick="switchTab('profile')">
+      <span class="tab-icon">👤</span>我的
+    </button>
+  </div>
+</div>
+
+<!-- ===== SUBSCRIBE SCREEN ===== -->
+<div id="screen-subscribe" class="screen">
+  <div class="subscribe-header">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+      <span style="font-size:22px;cursor:pointer;opacity:0.7" onclick="switchTab('main')">←</span>
+    </div>
+    <h2>📋 订阅管理</h2>
+    <p>设置关键词，AI 自动帮你监控低价好货</p>
+  </div>
+
+  <div class="scroll-content">
+    <!-- Add subscription form -->
+    <div class="subscribe-form" style="margin:16px;border-radius:var(--radius);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">➕ 添加新监控</div>
+      
+      <div class="form-group">
+        <label class="form-label">商品关键词</label>
+        <input class="form-input" id="kw-input" placeholder="例如：iPhone 15 Pro、MacBook M2..." />
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">价格区间（可选）</label>
+        <div class="range-row">
+          <input class="form-input" placeholder="最低价" type="number" />
+          <span>—</span>
+          <input class="form-input" placeholder="最高价" type="number" />
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">监控平台</label>
+        <div class="platform-select">
+          <div class="platform-option selected" id="p-xianyu" onclick="togglePlatform('xianyu')">
+            <div class="p-icon">🐟</div>
+            <div class="p-name">咸鱼</div>
+          </div>
+          <div class="platform-option selected" id="p-zhuanzhuan" onclick="togglePlatform('zhuanzhuan')">
+            <div class="p-icon">🔄</div>
+            <div class="p-name">转转</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">低价触发阈值（低于均价多少推送）</label>
+        <div class="discount-slider-wrap">
+          <div class="slider-value" id="slider-val">低于均价 40%</div>
+          <input type="range" class="slider" min="20" max="70" value="40" 
+            oninput="updateSlider(this.value)" id="discount-slider" />
+          <div class="slider-hints">
+            <span>20%</span>
+            <span>推荐40%</span>
+            <span>70%</span>
+          </div>
+        </div>
+      </div>
+
+      <button class="add-btn" onclick="addSubscription()">🔔 开始监控</button>
+    </div>
+
+    <!-- Existing subscriptions -->
+    <div class="section-header">
+      <div class="section-title">我的监控列表</div>
+      <button class="section-more">5 个关键词</button>
+    </div>
+    
+    <div class="sub-list" id="sub-list">
+      <div class="sub-item">
+        <div class="sub-icon">📱</div>
+        <div class="sub-info">
+          <div class="sub-name">iPhone 15 Pro</div>
+          <div class="sub-meta">咸鱼+转转 · 低于均价40% · 今日命中 <span class="sub-hits">3次</span></div>
+        </div>
+        <button class="sub-toggle" onclick="toggleSub(this)"></button>
+      </div>
+      <div class="sub-item">
+        <div class="sub-icon">💻</div>
+        <div class="sub-info">
+          <div class="sub-name">MacBook Pro M2</div>
+          <div class="sub-meta">咸鱼+转转 · 低于均价35% · 今日命中 <span class="sub-hits">1次</span></div>
+        </div>
+        <button class="sub-toggle" onclick="toggleSub(this)"></button>
+      </div>
+      <div class="sub-item">
+        <div class="sub-icon">🎮</div>
+        <div class="sub-info">
+          <div class="sub-name">PS5</div>
+          <div class="sub-meta">咸鱼 · 低于均价45% · 今日命中 <span class="sub-hits">2次</span></div>
+        </div>
+        <button class="sub-toggle" onclick="toggleSub(this)"></button>
+      </div>
+      <div class="sub-item">
+        <div class="sub-icon">🎧</div>
+        <div class="sub-info">
+          <div class="sub-name">Sony WH-1000XM5</div>
+          <div class="sub-meta">转转 · 低于均价50% · 今日命中 <span class="sub-hits">1次</span></div>
+        </div>
+        <button class="sub-toggle" onclick="toggleSub(this)"></button>
+      </div>
+      <div class="sub-item">
+        <div class="sub-icon">📷</div>
+        <div class="sub-info">
+          <div class="sub-name">Sony A7M4</div>
+          <div class="sub-meta">咸鱼+转转 · 低于均价40% · 暂无命中</div>
+        </div>
+        <button class="sub-toggle off" onclick="toggleSub(this)"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="tab-bar">
+    <button class="tab-item" onclick="switchTab('main')"><span class="tab-icon">🏠</span>发现</button>
+    <button class="tab-item active" onclick="switchTab('subscribe')"><span class="tab-icon">⭐</span>订阅</button>
+    <button class="tab-item" onclick="switchTab('notif')"><span class="tab-icon">🔔</span>通知</button>
+    <button class="tab-item" onclick="switchTab('profile')"><span class="tab-icon">👤</span>我的</button>
+  </div>
+</div>
+
+<!-- ===== NOTIFICATION SCREEN ===== -->
+<div id="screen-notif" class="screen">
+  <div class="status-bar">
+    <div class="logo" style="font-size:18px;color:var(--text)">🔔 低价提醒</div>
+    <div class="actions">
+      <button class="icon-btn" onclick="showToast('✅ 全部标为已读')">✓</button>
+    </div>
+  </div>
+
+  <div class="scroll-content">
+    <!-- Unread section -->
+    <div class="section-header">
+      <div class="section-title">未读 (3)</div>
+    </div>
+    <div class="notif-list">
+      
+      <div class="notif-item unread" onclick="openDetail('iphone15')">
+        <div class="notif-icon-wrap" style="background:var(--deal-bg)">📱</div>
+        <div class="notif-body">
+          <div class="notif-title">⚡️ iPhone 15 Pro 超低价！</div>
+          <div class="notif-desc">咸鱼发现一件 256G 国行，成色9新，仅需 <span class="notif-price">¥2,480</span>，低于均价 52%</div>
+          <div class="notif-time">5分钟前 · 咸鱼</div>
+        </div>
+      </div>
+
+      <div class="notif-item unread" onclick="openDetail('macbook')">
+        <div class="notif-icon-wrap" style="background:#EEF6FF">💻</div>
+        <div class="notif-body">
+          <div class="notif-title">🔥 MacBook Pro M2 低价</div>
+          <div class="notif-desc">转转发现一件 512G 版本，95新，仅需 <span class="notif-price">¥6,300</span>，低于均价 45%</div>
+          <div class="notif-time">23分钟前 · 转转</div>
+        </div>
+      </div>
+
+      <div class="notif-item unread" onclick="openDetail('ps5')">
+        <div class="notif-icon-wrap" style="background:#F0F0FF">🎮</div>
+        <div class="notif-body">
+          <div class="notif-title">🎯 PS5 价格触发预警</div>
+          <div class="notif-desc">咸鱼发现 PS5 数字版，送2手柄，仅需 <span class="notif-price">¥1,650</span>，低于均价 48%</div>
+          <div class="notif-time">1小时前 · 咸鱼</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Read section -->
+    <div class="section-header" style="margin-top:8px">
+      <div class="section-title" style="font-size:14px;color:var(--text-muted)">今日早些时候</div>
+    </div>
+    <div class="notif-list">
+      <div class="notif-item" onclick="openDetail('sony')" style="opacity:0.7">
+        <div class="notif-icon-wrap" style="background:#F5F5F5">🎧</div>
+        <div class="notif-body">
+          <div class="notif-title">Sony WH-1000XM5 低价提醒</div>
+          <div class="notif-desc">转转新上一件，9新，¥820，低于均价 54%</div>
+          <div class="notif-time">2小时前 · 已查看</div>
+        </div>
+      </div>
+      <div class="notif-item" style="opacity:0.7">
+        <div class="notif-icon-wrap" style="background:#F5F5F5">📱</div>
+        <div class="notif-body">
+          <div class="notif-title">iPhone 15 Pro 提醒（已售）</div>
+          <div class="notif-desc">¥2,900 的商品已被他人购走，下次更快！</div>
+          <div class="notif-time">4小时前 · 已过期</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-item" onclick="switchTab('main')"><span class="tab-icon">🏠</span>发现</button>
+    <button class="tab-item" onclick="switchTab('subscribe')"><span class="tab-icon">⭐</span>订阅</button>
+    <button class="tab-item active" onclick="switchTab('notif')"><span class="tab-icon">🔔</span>通知</button>
+    <button class="tab-item" onclick="switchTab('profile')"><span class="tab-icon">👤</span>我的</button>
+  </div>
+</div>
+
+<!-- ===== PROFILE SCREEN ===== -->
+<div id="screen-profile" class="screen">
+  <div class="status-bar">
+    <div class="logo" style="font-size:18px;color:var(--text)">👤 我的</div>
+  </div>
+  <div class="scroll-content" style="padding:0 16px 16px">
+    <!-- User card -->
+    <div style="background:linear-gradient(135deg,#FF6B35,#FF3B30);border-radius:var(--radius);padding:24px;margin:16px 0;color:white;display:flex;align-items:center;gap:16px">
+      <div style="width:56px;height:56px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;flex-shrink:0">😎</div>
+      <div>
+        <div style="font-size:18px;font-weight:800;margin-bottom:4px">捡漏达人</div>
+        <div style="font-size:13px;opacity:0.8">累计捡漏 18 件 · 省了 ¥ 12,680</div>
+      </div>
+    </div>
+    
+    <!-- Settings list -->
+    <div style="background:white;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)">
+      <div class="info-row" style="padding:14px 16px;cursor:pointer" onclick="showToast('⚙️ 通知设置')">
+        <span class="label">🔔 推送通知设置</span>
+        <span style="color:var(--text-muted)">已开启 ›</span>
+      </div>
+      <div class="info-row" style="padding:14px 16px;cursor:pointer" onclick="showToast('📊 价格数据来源')">
+        <span class="label">📊 均价数据来源</span>
+        <span style="color:var(--text-muted)">多平台综合 ›</span>
+      </div>
+      <div class="info-row" style="padding:14px 16px;cursor:pointer" onclick="showToast('🔄 扫描频率设置')">
+        <span class="label">🔄 扫描刷新频率</span>
+        <span style="color:var(--text-muted)">每15分钟 ›</span>
+      </div>
+      <div class="info-row" style="padding:14px 16px;cursor:pointer" onclick="showToast('🚫 屏蔽词设置')">
+        <span class="label">🚫 屏蔽词设置</span>
+        <span style="color:var(--text-muted)">3个 ›</span>
+      </div>
+      <div class="info-row" style="padding:14px 16px;border-bottom:none;cursor:pointer" onclick="showToast('❓ 帮助中心')">
+        <span class="label">❓ 帮助与反馈</span>
+        <span style="color:var(--text-muted)">›</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div style="margin-top:16px;font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px">📈 我的捡漏统计</div>
+    <div class="stats-row" style="padding:0">
+      <div class="stat-card">
+        <div class="stat-num" style="font-size:20px">18</div>
+        <div class="stat-label">历史捡漏</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="font-size:20px">47%</div>
+        <div class="stat-label">平均折扣</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" style="font-size:20px">¥703</div>
+        <div class="stat-label">平均省钱</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-item" onclick="switchTab('main')"><span class="tab-icon">🏠</span>发现</button>
+    <button class="tab-item" onclick="switchTab('subscribe')"><span class="tab-icon">⭐</span>订阅</button>
+    <button class="tab-item" onclick="switchTab('notif')"><span class="tab-icon">🔔</span>通知</button>
+    <button class="tab-item active" onclick="switchTab('profile')"><span class="tab-icon">👤</span>我的</button>
+  </div>
+</div>
+
+<!-- ===== DETAIL SCREEN ===== -->
+<div id="screen-detail" class="screen detail-screen">
+  <div class="detail-header">
+    <button class="back-btn" onclick="closeDetail()">←</button>
+    <div class="h-title" id="detail-title">商品详情</div>
+    <div style="margin-left:auto;display:flex;gap:10px">
+      <button class="icon-btn" onclick="showToast('❤️ 已收藏')">❤️</button>
+      <button class="icon-btn" onclick="showToast('📤 分享成功')">📤</button>
+    </div>
+  </div>
+
+  <div class="scroll-content">
+    <div class="detail-img" id="detail-img">📱</div>
+
+    <div class="detail-body">
+      <!-- Price card -->
+      <div class="detail-price-card">
+        <div id="d-discount-badge" class="discount-badge extreme" style="margin-bottom:8px">省 52%</div>
+        <div class="detail-price"><small>¥</small><span id="d-price">2,480</span></div>
+        <div class="detail-market-price">
+          全网均价 <span id="d-avg">¥5,200</span> · 
+          <span id="d-platform" style="color:var(--xianyu);font-weight:600">咸鱼</span>
+        </div>
+        <div class="savings-badge">
+          💰 比均价便宜 <span id="d-save">¥2,720</span>，立省 <span id="d-pct">52%</span>
+        </div>
+      </div>
+
+      <!-- Price chart -->
+      <div class="price-chart-card">
+        <div class="chart-title">📊 近30天价格走势（同类商品）</div>
+        <div class="mini-chart" id="detail-chart">
+          <div class="chart-bar avg" style="height:60%"></div>
+          <div class="chart-bar avg" style="height:65%"></div>
+          <div class="chart-bar avg" style="height:62%"></div>
+          <div class="chart-bar normal" style="height:70%"></div>
+          <div class="chart-bar avg" style="height:58%"></div>
+          <div class="chart-bar avg" style="height:63%"></div>
+          <div class="chart-bar avg" style="height:66%"></div>
+          <div class="chart-bar normal" style="height:72%"></div>
+          <div class="chart-bar avg" style="height:60%"></div>
+          <div class="chart-bar avg" style="height:61%"></div>
+          <div class="chart-bar avg" style="height:64%"></div>
+          <div class="chart-bar normal" style="height:55%"></div>
+          <div class="chart-bar avg" style="height:62%"></div>
+          <div class="chart-bar avg" style="height:67%"></div>
+          <div class="chart-bar current" style="height:25%"></div>
+        </div>
+        <div class="chart-labels">
+          <span class="chart-label">1月</span>
+          <span class="chart-label">2月</span>
+          <span class="chart-label">3月</span>
+          <span class="chart-label">今天</span>
+        </div>
+        <div style="display:flex;gap:16px;margin-top:10px;font-size:12px">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:#E8E8E8;border-radius:3px;display:inline-block"></span>历史均价</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--ok);border-radius:3px;display:inline-block"></span>低价</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:12px;height:12px;background:var(--deal);border-radius:3px;display:inline-block"></span>当前（超低价）</span>
+        </div>
+      </div>
+
+      <!-- Specs Match Card -->
+      <div class="detail-info-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <span style="color:var(--ok)">✓</span> 规格参数匹配确认
+        </div>
+        <div class="info-row">
+          <span class="label">型号版本</span>
+          <span class="value" id="d-model">iPhone 15 Pro</span>
+        </div>
+        <div class="info-row">
+          <span class="label">存储容量</span>
+          <span class="value" id="d-storage">256GB</span>
+        </div>
+        <div class="info-row">
+          <span class="label">销售地区</span>
+          <span class="value" id="d-region">国行</span>
+        </div>
+        <div class="info-row">
+          <span class="label">颜色</span>
+          <span class="value" id="d-color">原色钛金属</span>
+        </div>
+        <div class="info-row" style="border-bottom:none">
+          <span class="label">电池健康</span>
+          <span class="value" style="color:var(--ok)" id="d-battery">100%</span>
+        </div>
+      </div>
+
+      <!-- Seller Analysis Card -->
+      <div class="detail-info-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          🔍 卖家身份识别
+        </div>
+        <div class="info-row">
+          <span class="label">卖家类型</span>
+          <span class="value" style="color:var(--ok);font-weight:600" id="d-seller-type">✓ 个人卖家</span>
+        </div>
+        <div class="info-row">
+          <span class="label">历史交易</span>
+          <span class="value" id="d-trades">12笔</span>
+        </div>
+        <div class="info-row">
+          <span class="label">评价数量</span>
+          <span class="value" id="d-reviews">8条</span>
+        </div>
+        <div class="info-row">
+          <span class="label">注册时长</span>
+          <span class="value" id="d-joined">2年3个月</span>
+        </div>
+        <div class="info-row" style="border-bottom:none">
+          <span class="label">信用等级</span>
+          <span class="value" style="color:var(--ok)">⭐⭐⭐⭐ 优秀</span>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="detail-info-card">
+        <div class="info-row">
+          <span class="label">商品标题</span>
+          <span class="value" id="d-name" style="max-width:180px;text-align:right;font-size:13px">iPhone 15 Pro 256G 国行</span>
+        </div>
+        <div class="info-row">
+          <span class="label">成色描述</span>
+          <span class="value" id="d-cond">9新，无维修</span>
+        </div>
+        <div class="info-row">
+          <span class="label">发布平台</span>
+          <span class="value" id="d-plat2">咸鱼</span>
+        </div>
+        <div class="info-row">
+          <span class="label">发布时间</span>
+          <span class="value" id="d-time">5分钟前</span>
+        </div>
+        <div class="info-row" style="border-bottom:none">
+          <span class="label">系统评估</span>
+          <span class="value" style="color:var(--deal);font-weight:700">🔥 极值低价，建议速联</span>
+        </div>
+      </div>
+
+      <!-- Risk notice -->
+      <div style="background:#FFFBF0;border:1px solid #FFE082;border-radius:12px;padding:14px;font-size:13px;line-height:1.6;color:#7A6000;margin-bottom:8px">
+        ⚠️ <strong>捡漏提示</strong>：价格极低商品需注意核实真实性，建议与卖家沟通、查看更多图片后再下单。平台均有交易保障，使用官方渠道付款。
+      </div>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="action-area">
+      <button class="action-btn secondary" onclick="showToast('💬 已打开联系卖家')">联系卖家</button>
+      <button class="action-btn primary" onclick="openPlatformModal()">立即跳转 →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PLATFORM MODAL ===== -->
+<div class="modal-overlay" id="platform-modal" onclick="closePlatformModal(event)">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">选择跳转平台</div>
+    <div class="modal-actions">
+      <button class="modal-action-btn xianyu-btn" onclick="jumpToPlatform('xianyu')">
+        <span class="m-icon">🐟</span>
+        <div>
+          <div style="font-size:15px;font-weight:700">跳转咸鱼查看</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:2px">打开咸鱼 App 商品详情页</div>
+        </div>
+      </button>
+      <button class="modal-action-btn zhuanzhuan-btn" onclick="jumpToPlatform('zhuanzhuan')">
+        <span class="m-icon">🔄</span>
+        <div>
+          <div style="font-size:15px;font-weight:700">跳转转转查看</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:2px">打开转转 App 商品详情页</div>
+        </div>
+      </button>
+    </div>
+    <button style="width:100%;margin-top:10px;background:var(--bg);border:none;border-radius:12px;padding:14px;font-size:15px;color:var(--text-muted);cursor:pointer;font-family:inherit" onclick="closePlatformModal()">取消</button>
+  </div>
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== STATE =====
+let currentScreen = 'onboard';
+let prevScreen = 'main';
+const detailData = {
+  iphone15: {
+    emoji: '📱', title: 'iPhone 15 Pro', name: 'iPhone 15 Pro 256G 国行', price: '2,480',
+    avg: '¥5,200', save: '¥2,720', pct: '52%', discount: '省 52%',
+    cond: '9新，无维修', plat: '咸鱼', time: '5分钟前', platformId: 'xianyu',
+    model: 'iPhone 15 Pro', storage: '256GB', region: '国行', color: '原色钛金属', battery: '100%',
+    sellerType: 'personal', trades: '12笔', reviews: '8条', joined: '2年3个月'
+  },
+  macbook: {
+    emoji: '💻', title: 'MacBook Pro M2', name: 'MacBook Pro 14 M2 512G', price: '6,300',
+    avg: '¥11,500', save: '¥5,200', pct: '45%', discount: '省 45%',
+    cond: '95新，自用', plat: '转转', time: '23分钟前', platformId: 'zhuanzhuan',
+    model: 'MacBook Pro 14', storage: '512GB SSD', region: '国行', color: '深空灰', battery: '循环32次',
+    sellerType: 'personal', trades: '5笔', reviews: '4条', joined: '1年8个月'
+  },
+  ps5: {
+    emoji: '🎮', title: 'PS5 数字版', name: 'PS5 数字版 港版 + 2手柄', price: '1,650',
+    avg: '¥3,200', save: '¥1,550', pct: '48%', discount: '省 48%',
+    cond: '99新，如新', plat: '咸鱼', time: '1小时前', platformId: 'xianyu',
+    model: 'PS5 数字版', storage: '825GB', region: '港版', color: '白色', battery: 'N/A',
+    sellerType: 'personal', trades: '20笔', reviews: '15条', joined: '3年'
+  },
+  sony: {
+    emoji: '🎧', title: 'Sony WH-1000XM5', name: 'Sony WH-1000XM5 黑色', price: '820',
+    avg: '¥1,800', save: '¥980', pct: '54%', discount: '省 54%',
+    cond: '9新，降噪完好', plat: '转转', time: '2小时前', platformId: 'zhuanzhuan',
+    model: 'WH-1000XM5', storage: 'N/A', region: '国行', color: '黑色', battery: '正常',
+    sellerType: 'personal', trades: '3笔', reviews: '2条', joined: '8个月'
+  },
+  camera: {
+    emoji: '📷', title: 'Sony A7M4', name: 'Sony A7M4 + 28-70mm 套机', price: '9,200',
+    avg: '¥17,500', save: '¥8,300', pct: '47%', discount: '省 47%',
+    cond: '8新，快门约3万次', plat: '咸鱼', time: '3小时前', platformId: 'xianyu',
+    model: 'A7M4', storage: 'N/A', region: '国行', color: '黑色', battery: '原装',
+    sellerType: 'personal', trades: '8笔', reviews: '6条', joined: '1年2个月'
+  },
+  iphone15biz: {
+    emoji: '📱', title: 'iPhone 15 Pro', name: 'iPhone 15 Pro 256G 国行', price: '2,200',
+    avg: '¥5,200', save: '¥3,000', pct: '58%', discount: '省 58%',
+    cond: '大量现货，批发价', plat: '咸鱼', time: '刚刚', platformId: 'xianyu',
+    model: 'iPhone 15 Pro', storage: '256GB', region: '国行', color: '原色钛金属', battery: '100%',
+    sellerType: 'business', trades: '1,250笔', reviews: '892条', joined: '4年'
+  }
+};
+
+// ===== NAVIGATION =====
+function goToMain() {
+  switchScreen('screen-main');
+  currentScreen = 'main';
+}
+
+function switchTab(tab) {
+  const screens = {
+    main: 'screen-main',
+    subscribe: 'screen-subscribe',
+    notif: 'screen-notif',
+    profile: 'screen-profile'
+  };
+  if (screens[tab]) {
+    switchScreen(screens[tab]);
+    currentScreen = tab;
+  }
+}
+
+function switchScreen(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(screenId).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function openDetail(id) {
+  prevScreen = currentScreen;
+  const d = detailData[id];
+  if (!d) return;
+  
+  document.getElementById('detail-title').textContent = d.title;
+  document.getElementById('detail-img').textContent = d.emoji;
+  document.getElementById('d-price').textContent = d.price;
+  document.getElementById('d-avg').textContent = d.avg;
+  document.getElementById('d-save').textContent = d.save;
+  document.getElementById('d-pct').textContent = d.pct;
+  document.getElementById('d-discount-badge').textContent = d.discount;
+  document.getElementById('d-name').textContent = d.name;
+  document.getElementById('d-cond').textContent = d.cond;
+  document.getElementById('d-plat2').textContent = d.plat;
+  document.getElementById('d-time').textContent = d.time;
+  
+  // Specs
+  document.getElementById('d-model').textContent = d.model;
+  document.getElementById('d-storage').textContent = d.storage;
+  document.getElementById('d-region').textContent = d.region;
+  document.getElementById('d-color').textContent = d.color;
+  document.getElementById('d-battery').textContent = d.battery;
+  
+  // Seller info
+  const sellerTypeEl = document.getElementById('d-seller-type');
+  if (d.sellerType === 'personal') {
+    sellerTypeEl.textContent = '✓ 个人卖家';
+    sellerTypeEl.style.color = 'var(--ok)';
+  } else {
+    sellerTypeEl.textContent = '⚠ 疑似商家';
+    sellerTypeEl.style.color = 'var(--warn)';
+  }
+  document.getElementById('d-trades').textContent = d.trades;
+  document.getElementById('d-reviews').textContent = d.reviews;
+  document.getElementById('d-joined').textContent = d.joined;
+  
+  const pTag = document.getElementById('d-platform');
+  pTag.textContent = d.plat;
+  pTag.style.color = d.platformId === 'xianyu' ? 'var(--xianyu)' : 'var(--zhuanzhuan)';
+  
+  switchScreen('screen-detail');
+  currentScreen = 'detail';
+}
+
+function closeDetail() {
+  const backTo = {
+    main: 'screen-main',
+    subscribe: 'screen-subscribe',
+    notif: 'screen-notif',
+    profile: 'screen-profile'
+  };
+  switchScreen(backTo[prevScreen] || 'screen-main');
+  currentScreen = prevScreen;
+}
+
+// ===== PLATFORM MODAL =====
+function openPlatformModal() {
+  document.getElementById('platform-modal').classList.add('open');
+}
+
+function closePlatformModal(e) {
+  if (!e || e.target === document.getElementById('platform-modal')) {
+    document.getElementById('platform-modal').classList.remove('open');
+  }
+}
+
+function jumpToPlatform(platform) {
+  closePlatformModal();
+  if (platform === 'xianyu') {
+    showToast('🐟 正在跳转咸鱼 App...');
+    // Real: window.location.href = 'xianyu://...' or deeplink
+    setTimeout(() => showToast('✅ 已在咸鱼打开商品页面'), 1500);
+  } else {
+    showToast('🔄 正在跳转转转 App...');
+    setTimeout(() => showToast('✅ 已在转转打开商品页面'), 1500);
+  }
+}
+
+// ===== FILTER =====
+function filterDeals(el, cat) {
+  document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  
+  const cards = document.querySelectorAll('.deal-card');
+  cards.forEach(card => {
+    if (cat === 'all' || card.dataset.cat === cat) {
+      card.style.display = 'flex';
+    } else {
+      card.style.display = 'none';
+    }
+  });
+  
+  const visible = [...cards].filter(c => c.style.display !== 'none').length;
+  if (visible === 0) showToast('该分类暂无低价商品');
+}
+
+// ===== SUBSCRIPTION =====
+function togglePlatform(id) {
+  const el = document.getElementById('p-' + id);
+  el.classList.toggle('selected');
+}
+
+function updateSlider(val) {
+  const percent = parseInt(val);
+  document.getElementById('slider-val').textContent = `低于均价 ${percent}%`;
+  const slider = document.getElementById('discount-slider');
+  const pct = (percent - 20) / 50 * 100;
+  slider.style.background = `linear-gradient(to right, var(--primary) 0%, var(--primary) ${pct}%, var(--border) ${pct}%)`;
+}
+
+function addSubscription() {
+  const kw = document.getElementById('kw-input').value.trim();
+  if (!kw) {
+    showToast('⚠️ 请输入商品关键词');
+    return;
+  }
+  
+  const discount = document.getElementById('discount-slider').value;
+  const list = document.getElementById('sub-list');
+  const emojis = {'iPhone':'📱','苹果':'📱','MacBook':'💻','电脑':'💻','PS':'🎮','Xbox':'🎮','Sony':'🎧','耳机':'🎧','相机':'📷','iPad':'📱'};
+  let emoji = '🔍';
+  for (const [key, val] of Object.entries(emojis)) {
+    if (kw.includes(key)) { emoji = val; break; }
+  }
+  
+  const item = document.createElement('div');
+  item.className = 'sub-item';
+  item.style.animation = 'fadeUp 0.3s ease-out';
+  item.innerHTML = `
+    <div class="sub-icon">${emoji}</div>
+    <div class="sub-info">
+      <div class="sub-name">${kw}</div>
+      <div class="sub-meta">咸鱼+转转 · 低于均价${discount}% · 监控中</div>
+    </div>
+    <button class="sub-toggle" onclick="toggleSub(this)"></button>
+  `;
+  list.insertBefore(item, list.firstChild);
+  
+  document.getElementById('kw-input').value = '';
+  showToast(`✅ 已添加「${kw}」的监控`);
+}
+
+function toggleSub(btn) {
+  btn.classList.toggle('off');
+  showToast(btn.classList.contains('off') ? '⏸ 已暂停监控' : '▶️ 已恢复监控');
+}
+
+// ===== TOAST =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ===== SELLER FILTER FUNCTIONS =====
+let filterState = {
+  personalOnly: true,
+  specMatch: true,
+  blockBusiness: true,
+  highCredit: false
+};
+
+function toggleSellerFilter(type) {
+  if (type === 'personal') {
+    filterState.personalOnly = !filterState.personalOnly;
+    document.getElementById('filter-personal').classList.toggle('active', filterState.personalOnly);
+    applyFilters();
+    showToast(filterState.personalOnly ? '✅ 仅显示个人卖家' : '⚠️ 显示所有卖家类型');
+  } else if (type === 'business') {
+    filterState.blockBusiness = !filterState.blockBusiness;
+    document.getElementById('filter-business').classList.toggle('warning', filterState.blockBusiness);
+    document.getElementById('filter-business').classList.toggle('active', filterState.blockBusiness);
+    applyFilters();
+    showToast(filterState.blockBusiness ? '🛡️ 已屏蔽疑似商家' : '⚠️ 已取消商家屏蔽');
+  }
+}
+
+function toggleSpecMatch() {
+  filterState.specMatch = !filterState.specMatch;
+  document.getElementById('filter-spec').classList.toggle('active', filterState.specMatch);
+  showToast(filterState.specMatch ? '✅ 已开启规格精准匹配' : '⚠️ 规格匹配已关闭');
+}
+
+function toggleCreditFilter() {
+  filterState.highCredit = !filterState.highCredit;
+  document.getElementById('filter-credit').classList.toggle('active', filterState.highCredit);
+  showToast(filterState.highCredit ? '⭐ 仅显示高信用卖家' : '⚠️ 已取消信用筛选');
+}
+
+function applyFilters() {
+  const cards = document.querySelectorAll('.deal-card');
+  let hiddenCount = 0;
+  
+  cards.forEach(card => {
+    const isBusiness = card.querySelector('.seller-badge.business');
+    
+    if (filterState.blockBusiness && isBusiness) {
+      card.style.display = 'none';
+      hiddenCount++;
+    } else {
+      card.style.display = 'flex';
+    }
+  });
+  
+  if (hiddenCount > 0) {
+    setTimeout(() => showToast(`🛡️ 已过滤 ${hiddenCount} 个商家商品`), 500);
+  }
+}
+
+// ===== INIT =====
+// Simulate new deal arriving
+setTimeout(() => {
+  showToast('⚡️ 发现新低价：AirPods Pro 2 ¥680');
+  const stat = document.getElementById('stat-today');
+  if (stat) stat.textContent = '13';
+}, 5000);
+
+setTimeout(() => {
+  showToast('🔥 iPhone 15 Pro 又有一件低价出现！');
+}, 12000);
+
+// Simulate business item appearing and being filtered
+setTimeout(() => {
+  const bizItem = document.getElementById('biz-item-1');
+  if (bizItem && filterState.blockBusiness) {
+    bizItem.style.display = 'none';
+    showToast('🛡️ 自动过滤：发现商家商品（交易量1250笔）');
+  }
+}, 8000);
+</script>
+
+</body>
+</html>

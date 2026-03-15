@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.jianlou.app" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>捡漏雷达</name>
+    <description>
+        二手低价商品智能监控 - 自动扫描咸鱼、转转，发现低于全网均价40%以上的超值捡漏机会
+    </description>
+    <author email="support@jianlou.app" href="https://jianlou.app">
+        捡漏雷达团队
+    </author>
+    <content src="index.html" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-navigation href="*" />
+    
+    <!-- 应用配置 -->
+    <preference name="Orientation" value="portrait" />
+    <preference name="Fullscreen" value="false" />
+    <preference name="BackgroundColor" value="0xFFF5F5F7" />
+    <preference name="StatusBarBackgroundColor" value="#FF6B35" />
+    <preference name="StatusBarStyle" value="lightcontent" />
+    
+    <!-- WebView配置 -->
+    <preference name="AndroidInsecureFileModeEnabled" value="true" />
+    <preference name="Scheme" value="https" />
+    <preference name="Hostname" value="localhost" />
+    
+    <!-- 权限 -->
+    <access origin="*" />
+    <allow-intent href="tel:*" />
+    <allow-intent href="sms:*" />
+    <allow-intent href="mailto:*" />
+    <allow-intent href="geo:*" />
+</widget>
